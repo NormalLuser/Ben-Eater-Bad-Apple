@@ -97,15 +97,15 @@ ReadByteTemp = $07
   ;Just have to remember to throw away the 10 byte
   ;CRC every 512 bytes. Otherwise the bits stream forever.
   jsr sd_writebyte
-  lda #$00           ; sector 24:31
+  lda #$00           
   jsr sd_writebyte
-  lda #$00           ; sector 16:23
+  lda #$00           
   jsr sd_writebyte
-  lda #$00           ; sector 8:15
+  lda #$00           
   jsr sd_writebyte
-  lda #$00           ; sector 0:7
+  lda #$00           
   jsr sd_writebyte
-  lda #RLECount           ; crc (not checked)
+  lda #RLECount           
   jsr sd_writebyte
 
   jsr sd_waitresult
