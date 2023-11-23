@@ -3,7 +3,8 @@ Bad Apple for Worlds Worst Video Card + 6502 kits
 6502 Assembly and PC Python based encoder
 
 Now with 37 FPS!!! Wow! On my way!
-Uploaded both normal BIN and INTEL HEX.
+![Bad Apple Demo](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/BadCider.png)
+
 
 Load up my BeWozmon with rom, or by using the BeEhBasic in my projects page and typing CALL $1800
 Then from Wozmon Type L 
@@ -16,7 +17,7 @@ BadApple37Woz.txt
 And just copy and paste it into your terminal. 
 I use TeraTerm and have Transmit Delay set to 3 and 17 in Setup→Serial Port…
 This works fine with my CPU clocked at 5Mhz and running in both Hsync and Vsync as recommended for this demo.
-
+![Bad Apple Demo](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/BadAppleDecoder.jpg)
 Speaking of…
 Demo Hardware:
 Start with a Stock: 
@@ -40,12 +41,4 @@ While doing this demo disconnect everything else from Port A. (Like the P/S2 key
 You can use whatever you like on Port B but leave PA7 (bit 8) free for music in the future.
 I happened to use bit 5  VIA pin PB4 for Data Out (MOSI) and bit 3 VIA pin PB3.
 
-
-
-
-
-
-
-![Bad Apple Demo](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/BadCider.png)
-![Bad Apple Demo](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/BadAppleDecoder.jpg)
 
