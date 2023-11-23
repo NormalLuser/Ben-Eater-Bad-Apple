@@ -11,7 +11,7 @@ Then from Wozmon Type L
 This will put it in INTEL HEX LOAD mode. 
 Then drag and drop the HEX file and transfer in binary mode. (TeraTerm)
 
-If you are running the sBadApple37Woz.txttock Ben Eater Wozmonitor and can't load hex files you can use:
+If you are running the stock Ben Eater Wozmonitor and can't load hex files you can use:
 BadApple37Woz.txt
 
 And just copy and paste it into your terminal. 
