@@ -6,10 +6,11 @@ Now with 37 FPS!!! Wow! On my way!
 ![Bad Apple Demo](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/BadCider.png)
 
 
-Load up my BeWozmon with rom, or by using the BeEhBasic in my projects page and typing CALL $1800
+Load up my BeWozmon with rom, or by using the BeEhBasic in my projects page and typing CALL $Fc00
 Then from Wozmon Type L 
-This will put it in INTEL HEX LOAD mode. 
+This will put it in INTEL HEX LOAD mode. Then 
 Then drag and drop the HEX file and transfer in binary mode. (TeraTerm)
+Then 1800R.
 
 If you are running the stock Ben Eater Wozmonitor and can't load hex files you can use:
 BadApple37Woz.txt
