@@ -36,7 +36,7 @@ Read this: https://github.com/gfoot/sdcard6502
 To follow the same instructions I did.
 
 Get the SD card thing-ie. It is just a tiny board with a micro SD card slot, chips to switch from 5 volt on the 6502 side to 3 volt on the sd card side.
-I do use pull-up resistors on the sd signal pins.
+I do use pull-up resistors on the sd signal pins. <edit> I pulled the resistors and instead just connect right to the via. It works fine.
 
 
 NOTE:
