@@ -2,6 +2,10 @@
 Bad Apple for Worlds Worst Video Card + 6502 kits
 6502 Assembly and PC Python based encoder
 
+https://www.youtube.com/watch?v=ysJHTtSuPqE
+
+
+
 Now with 37 FPS!!! Wow! On my way!
 ![Bad Apple Demo](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/BadCider.png)
 
