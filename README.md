@@ -6,6 +6,10 @@ Now with 37 FPS!!! Wow! On my way!
 ![Bad Apple Demo](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/BadCider.png)
 
 
+*** NOTE ***
+BadBeepVsyncApple MUST have a jumper connecting the Vsync signal on the VGA to the NMI(Non Maskable Interupt) pin on the 65C02. If this is not connected this version of the Demo will stall waiting for Vsync.
+
+
 Load up my BeWozmon with rom, or by using the BeEhBasic in my projects page and typing CALL $Fc00
 Then from Wozmon Type L 
 This will put it in INTEL HEX LOAD mode. Then 
