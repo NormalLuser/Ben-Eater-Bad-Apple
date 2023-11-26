@@ -9,13 +9,12 @@ Now with 37 FPS!!! Wow! On my way!
 *** NOTE ***
 BadBeepVsyncApple MUST have a jumper connecting the Vsync signal on the VGA to the NMI(Non Maskable Interupt) pin on the 65C02. If this is not connected this version of the Demo will stall waiting for Vsync.
 You also MUST have this in your Boot ROM:
-NMI_vec
-; NMI:;
       
-      PHP ;Push that CPU flag
-      DEC $E2 ;Lets dec 
-      PLP ;Pull that flag!
-      RTI
+      NMI_vec:
+       PHP ;Push that CPU flag
+       DEC $E2 ;Lets dec 
+       PLP ;Pull that flag!
+       RTI
 
 If you use my version of EhBasic for Ben Eater 6502 you will already have this:
 https://github.com/Fifty1Ford/BeEhBasic
