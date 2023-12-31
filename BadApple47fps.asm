@@ -77,7 +77,7 @@ ScreenH           = $EE       ; to draw TO
 .Array3: ; This is 192 bytes
     .byte 0,21,0,0,42,0,0,63,0,0,21,21,0,42,21,42,0,21,0,63,21,63,0,21,0,42,42,0,63,42,63,0,42,0,63,63,0,21,42,21,21,63,21,21,42,42,21,63,42,63,21,42,21,63,63,21,42,63,42,42,63,63,42,63
         
-.TriPixel: ;Move  for faster no color decode
+.TriPixel: ;Up here so I don't need a JMP
 ;ok, lame, but just hack the beep in here for now?
 ;only costs a few seconds in playtime.. but can be better.
 ; check for beep on skips instead?   
@@ -92,7 +92,7 @@ ScreenH           = $EE       ; to draw TO
     sta (Screen),y
     INY
     LDA .Array3-65,x
-   ; sta (Screen),y ;Skip this store, RLE below will get it
+   ;STA (Screen),y ;Skip this store, RLE below will get it
     STA PlotColor
 .TriDone:
   LDX RLECount
@@ -161,16 +161,16 @@ ScreenH           = $EE       ; to draw TO
   ; No Color for you! 
   ; Removed above and moved SkipRin below to remove color
   ; and save the BCS cycles with a fall through
-.SkipRun:
+.SkipRun: ;Just add this amount to the screen pointer
   clc  
   TYA
   adc RLECount
   TAY
   lda ScreenH
   adc #$00
-  sta ScreenH
-  CMP #$40
-  BEQ .sRstTop
+  sta ScreenH ;Since we always encode skips on the edge of the screen we only need to check
+  CMP #$40    ;for the screen roll-over at $4000 in the Skip routine.   
+  BEQ .sRstTop;We never roll-over while in the draw routines becuse we are always on-screen.
   
   JMP .readloop 
 .sRstTop:
@@ -185,7 +185,7 @@ ScreenH           = $EE       ; to draw TO
 ;Regardless, this is the fastest way I could think of to throw away 10 bytes
 ;It is worth FRAMES.. As in more than 1 Frame a second to do this silly stuff!
  ;->UnrollBelow Change to BIT from LDA so that A is not trashed.
- bit VIA_PORTA
+ bit VIA_PORTA 
   bit VIA_PORTA
   bit VIA_PORTA
   bit VIA_PORTA
@@ -284,93 +284,35 @@ ScreenH           = $EE       ; to draw TO
   bit VIA_PORTA
   bit VIA_PORTA
 ;Done tossing bytes
-; ;Debug bar
-    ;   LDA #48
-    ;   STA $2063
-    ;   STA $2062
-    ;   STA $2061
-    ;   STA $2060
-    ;   LDA #0
-    ;   STA $20E3
-    ;   STA $20E2
-    ;   STA $20E1
-    ;   STA $20E0
-    ;   STA $2163
-    ;   STA $2162
-    ;   STA $2161
-    ;   STA $2160
 
 ;HOW ABOUT WE LOOP FOREVER?
   ;JMP .readloop 
-  JMP .BlockReturn
-  ;Yep, it will happily stream garbage off the SD card forever.
+  JMP .BlockReturn   ;Yep, it will happily stream garbage off the SD card forever.
 
-.VgaWait:
-;  ;debug
-;  bra .BeepExit
- LDA VGAClock
- STA LastClock
- ;load a couple of bytes?
-;  ;Debug bar
-    ;   LDA #60
-    ;   STA $20E3
-    ;   STA $20E2
-    ;   STA $20E1
-    ;   STA $20E0
-    ;   STA $20DF
-    ;   LDA #0
-    ;   STA $2063
-    ;   STA $2062
-    ;   STA $2061
-    ;   STA $2060
-.VgaStillWaiting:
- LDA VGAClock
- CMP LastClock
- BEQ .VgaStillWaiting
- bra .BeepExit
 
-.VgaWait2:
-;  ;debug
-;  bra .BeepExit
-
- LDA VGAClock
- STA LastClock
-;  ;Debug bar
-    ;  LDA #4
-    ;  STA $2163
-    ;  STA $2162
-    ;  STA $2161
-    ;  STA $2160
-    ;  STA $215F
-    ;  LDA #0
-    ;  STA $2063
-    ;  STA $2062
-    ;  STA $2061
-    ;  STA $2060
- ;load a couple of bytes?
+.VgaWait2: ;Wait 2 Vsync cycles
+;  bra .BeepExit ;Debug
+  LDA VGAClock
+  STA LastClock
+  ;Buffer reads would be here
 .VgaStillWaiting2:
- LDA VGAClock
- CMP LastClock
- BEQ .VgaStillWaiting2
+  LDA VGAClock
+  CMP LastClock
+  BEQ .VgaStillWaiting2
 
- LDA VGAClock
- STA LastClock
- ;load a couple of bytes?
-.VgaStillWaiting3:
- LDA VGAClock
- CMP LastClock
- BEQ .VgaStillWaiting3
- ;Debug
-    ;  LDA #0
-    ;  STA $2063
-    ;  STA $2062
- bra .BeepExit
-
+.VgaWait: ;Wait 1 Vsync cycle
+;  bra .BeepExit ;Debug
+  LDA VGAClock
+  STA LastClock
+  ;Buffer reads would be here
+.VgaStillWaiting:
+  LDA VGAClock
+  CMP LastClock
+  BEQ .VgaStillWaiting 
 .BeepExit:     ;RTS
-    
-    JMP .readloop 
+  JMP .readloop 
  
-.Beep:
+.Beep: ;Should be called 'Frame'
     ;Actual Beep moved to system IRQ.
     ;Right now I will assume that the encoder will send 
     ;some number of Audio packets before starting to send frames.
