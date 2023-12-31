@@ -82,8 +82,8 @@ ScreenH           = $EE       ; to draw TO
 ;only costs a few seconds in playtime.. but can be better.
 ; check for beep on skips instead?   
     CMP #255
-    ;BEQ .GotoBeep ;Beep and Vsync   
-    BEQ .readloop ;Skip all vsync's
+    BEQ .GotoBeep ;Beep and Vsync   
+    ;BEQ .readloop ;Skip all vsync's
     
     TAX ;color/index to x
     LDA .Array1-65,x ;Array is #'s 65-129, adjust by using ArrrayZ-65
@@ -94,7 +94,7 @@ ScreenH           = $EE       ; to draw TO
     INY
     LDA .Array3-65,x
    ;STA (Screen),y ;Skip this store, RLE below will get it
-    STA PlotColor
+  ;  STA PlotColor
 .TriDone:
   LDX RLECount
   
@@ -105,10 +105,10 @@ ScreenH           = $EE       ; to draw TO
   BNE .RLETop
 
 .RLEDone
-  JMP .readloop 
+  BRA .readloop 
 
-; .GotoBeep:
-;   JMP .Beep
+ .GotoBeep:
+   JMP .Beep
 
  .readloop:
  ;Read 2 Bytes: UNROLL!!!
@@ -148,7 +148,7 @@ ScreenH           = $EE       ; to draw TO
     asl
     ora VIA_PORTA
  
- sta PlotColor
+ ;sta PlotColor ;A kept, PlotColor never loaded.
   
   dec Block_Counter
   BEQ .BLOCK
@@ -160,7 +160,7 @@ ScreenH           = $EE       ; to draw TO
   BNE .TriPixel
   ;BCS .TriPixel ;BCS GREATER THAN 64
   ; No Color for you! 
-  ; Removed above and moved SkipRin below to remove color
+  ; Removed above and moved SkipRun below to remove color
   ; and save the BCS cycles with a fall through
 .SkipRun: ;Just add this amount to the screen pointer
   clc  
@@ -173,35 +173,34 @@ ScreenH           = $EE       ; to draw TO
   CMP #$40    ;for the screen roll-over at $4000 in the Skip routine.   
   BEQ .sRstTop;We never roll-over while in the draw routines becuse we are always on-screen.
   
-  JMP .readloop 
+  BRA .readloop 
 .sRstTop:
-  LDA #$20 ;Reset screen pointer to first pixel
-  STA ScreenH
-;Assumed Vsync routine
-;This does a almost perfect job of keeping the video
-;in sync with the 30 FPS source.
-;I load the VGAClock ZP value that is DEC by
-;the Vsync NMI IRQ with 102 and use 100 as my 'zero'
-;This allows me to get a vsync deficit and 
-;Catch-up
-.Vsync: 
-  LDA VGAClock
-  CMP #100
-  BCS .EGVsync
-;Less than 100 no delay
-  INC VGAClock ;Add two
-  INC VGAClock ;for 30 fps
-  JMP .readloop 
-.EGVsync ;Equal or grater than 100
-  BEQ .Synced  ;We are at 100
-;Greater than 100 
-  JMP .Vsync ;Wait some more
-.Synced
-  INC VGAClock ;Add two
-  INC VGAClock ;for 30 fps
-  JMP .readloop 
+  LDA #$20   ;Reset screen pointer to first pixel
+  STA ScreenH;New Frame starts at $2000
 
-.BLOCK: ; 644 CYCLES
+;Assumed Vsync routine. 
+;Smoothest video yet!
+;This does a almost perfect job of keeping the video
+;in sync with the 30 FPS source!
+;I load the VGAClock ZP value that is DEC by
+;the Vsync NMI IRQ with 202 and use 200 as my 'zero'
+;This allows me to get a vsync deficit and 
+;catch-up in the frames after.
+.Vsync: 
+  LDX VGAClock
+  CPX #200 
+  BCS .EGVsync ; = > 200
+  ; Less than 200 no wait. Try to catch up,
+.Synced
+  INC VGAClock ;Add two for 30 Frames a Second
+  INC VGAClock ;VGA is 60 FPS
+  BRA .readloop;Start next frame  
+.EGVsync ; = > 200
+  BEQ .Synced  ; = 200 ;Good Vsync. Done waiting.
+  ; > 200 
+  BRA .Vsync ;Wait for Vsync
+
+.BLOCK: ; 320 CYCLES
   ;must throw away 10 bytes every block.
 ;OK, JUST UNROLL, NEED TO FIGURE OUT MACROS SO IT DOES NOT LOOK LIKE THIS
 ;Regardless, this is the fastest way I could think of to throw away 10 bytes
@@ -311,58 +310,42 @@ ScreenH           = $EE       ; to draw TO
   ;JMP .readloop 
   JMP .BlockReturn   ;Yep, it will happily stream garbage off the SD card forever.
 
-
-; .VgaWait2: ;Wait 2 Vsync cycles
-; ;  bra .BeepExit ;Debug
-;   LDA VGAClock
-;   STA LastClock
-;   ;Buffer reads would be here
-; .VgaStillWaiting2:
-;   LDA VGAClock
-;   CMP LastClock
-;   BEQ .VgaStillWaiting2
-
-; .VgaWait: ;Wait 1 Vsync cycle
-; ;  bra .BeepExit ;Debug
-;   LDA VGAClock
-;   STA LastClock
-;   ;Buffer reads would be here
-; .VgaStillWaiting:
-;   LDA VGAClock
-;   CMP LastClock
-;   BEQ .VgaStillWaiting 
-; .BeepExit:     ;RTS
-;   JMP .readloop 
+ .BeepExit:     ;RTS
+   JMP .readloop 
  
-; .Beep: ;Should be called 'Frame'
-;     ;Actual Beep moved to system IRQ.
-;     ;Right now I will assume that the encoder will send 
-;     ;some number of Audio packets before starting to send frames.
-;     ;Yea' forget that nonsense....
-;     ;Just store the music in ROM and setup a IRQ routine
-;     ;to send the beeps. Stream video only for now?
-;     ;Same with V-sync. Will move to self v-sync
-;     ;on screen roll-over.
-;     ;Leave in place for now.
+.Beep: ;Should be called 'Frame'
+    ;Actual Beep moved to system IRQ.
+    ;Right now I will assume that the encoder will send 
+    ;some number of Audio packets before starting to send frames.
+    ;Yea' forget that nonsense....
+    ;Just store the music in ROM and setup a IRQ routine
+    ;to send the beeps. Stream video only for now?
+    ;Same with V-sync. Will move to self v-sync
+    ;on screen roll-over.
+    ;Leave in place for now.
 
-;       LDA RLECount
-;       ;BEQ .BEEP_Off    ;if note 0 turn off beep; 
-;       CMP #1           ;Yes, putting the v-sync in the beep command.
-;       BEQ .VgaWait     ;Both meant to be run on frames.
-;       ;LAME, FIX THIS
-;       CMP #2           ;Yes, putting the v-sync in the beep command.
-;       BEQ .VgaWait2     ;Both meant to be run on frames at least
-;                         ;Maybe I should call it a Frame command?  
+      LDA RLECount
+      ;BEQ .BEEP_Off    ;if note 0 turn off beep; 
+      ;VGA wait moved to assembly code but still
+      ;here for old encodes
+      CMP #1           ;Yes, putting the v-sync in the beep command.
+      ;BEQ .VgaWait     ;Both meant to be run on frames.
+      BEQ .BeepExit ;Skip now that vsync is on 6502 side
+      ;LAME, FIX THIS
+      CMP #2           ;Yes, putting the v-sync in the beep command.
+      ;BEQ .VgaWait2     ;Both meant to be run on frames at least
+      BEQ .BeepExit ;Skip now that vsync is on 6502 side
+                        ;Maybe I should call it a Frame command?  
 
-;       LDX BeepWrite
-;       STA BeepBuffer,x
-;       INC BeepWrite  
+      LDX BeepWrite
+      STA BeepBuffer,x
+      INC BeepWrite  
 
-;       ;Last thing
-;       INC BeepCount
-;       LDA #1
-;       STA BeepEnable
-;       BRA .BeepExit
+      ;Last thing
+      INC BeepCount
+      LDA #1
+      STA BeepEnable
+      BRA .BeepExit
 
 
 .BootUp
@@ -440,21 +423,19 @@ ScreenH           = $EE       ; to draw TO
   ; Port A is in Clock pulse mode.
   ; A read will pulse the clock. 
   ; We will stream forever after that.
-  
-  
+    
   
   ;**************************
   lda VIA_PORTA ; toggle the clock once at the start to prime
-  ;-WE ARE STREAMING BITS NOW IN PORT A-
+  ;-WE ARE STREAMING BITS FROM THE SD CARD NOW IN PORT A PA0-
  
  ;Start Vsync
-  LDA #102 
+  LDA #202 
   STA VGAClock
  
   ;*** Jump to video stream decode now! ***
   JMP .readloop
   ;***********************
-
 
 
 sd_init:
@@ -535,12 +516,11 @@ sd_init:
   ; Otherwise expect status response $01 (not initialized)
   cmp #$01
   bne sd_init;.initfailed
-
   ; Not initialized yet, so wait a while then try again.
   ; This retry is important, to give the card time to initialize.
   ;jsr delay.. NOT THAT IMPORTANT? Works with just a nop.. removed delay
   nop
-  jmp .cmd55
+  bra .cmd55
 
 .initialized
   rts
