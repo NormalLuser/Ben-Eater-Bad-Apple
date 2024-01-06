@@ -16,9 +16,7 @@ You also MUST have this in your Boot ROM:
       
        
        NMI_vec:
-       PHP ;Push that CPU flag
-       DEC $E2 ;Lets dec 
-       PLP ;Pull that flag!
+        DEC $E2 ;Lets dec 
        RTI
 
 If you use my version of EhBasic for Ben Eater 6502 you will already have this:
