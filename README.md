@@ -10,7 +10,12 @@ Bad Apple for Worlds Worst Video Card + 6502 kits
 ![Steamboat Willie](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/Steamboat.png)
 
 
+
+
+
 This was very helpful:
+
+
 ![Encode Metrics](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/YourBadAppleAndChangeSir.png)
 
 
