@@ -1,7 +1,21 @@
 # Ben-Eater-Bad-Apple
+![Bad Cider](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/BadCider.png)
 Bad Apple for Worlds Worst Video Card + 6502 kits
 6502 Assembly and PC Python based encoder
 
+1/11/2024
+47 fps decoder and Steamboat Willie encode.
+
+![Steamboat Willie](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/Steamboat.png)
+
+
+This was very helpful:
+![Encode Metrics](https://raw.githubusercontent.com/Fifty1Ford/Ben-Eater-Bad-Apple/main/YourBadAppleAndChangeSir.png)
+
+
+
+
+2023
 Now with Added Vsync!
 BadBeepVsyncApple
 
