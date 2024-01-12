@@ -4,13 +4,14 @@
 ;SD CARD ROUTINE BASED ON GFOOT SD CARD 6502 GUIDE
 
 ;A wire connecting the VGA Vsync signal to the NMI is used for
-;BUFV command for a Vsync Buffer switch. It can also be used
+;for a Vsync Buffer switch. It can also be used
 ;for a 1/60th of a second timer or with user input a random seed.
 ;If this is not connected system will hang.
 
 ;Disconnect LCD and clock system to 5 mhz. (use first counter output of VGA for 5mhz clock)
 ;Run in both hsync and vsync (1 pixels on left side will have a noise line on top at 5mhz)
-;I disconnect the little LCD while working with this.
+;This gives you 1.4Mhz effective CPU speed.
+;I disconnect the little LCD and any buttons from the VIA while working with this.
 ;SD Card input is PA0 MISO
 ;to make the serial code FAST.
 ;I also have pulse mode on reads
@@ -81,8 +82,10 @@ ScreenH           = $EE       ; to draw TO
 ;ok, lame, but just hack the beep in here for now?
 ;only costs a few seconds in playtime.. but can be better.
 ; check for beep on skips instead?   
-    CMP #255
-    BEQ .GotoBeep ;Beep and Vsync   
+
+;Steamboat Willie version no beep
+;    CMP #255
+;    BEQ .GotoBeep ;Beep and Vsync   
     ;BEQ .readloop ;Skip all vsync's
     
     TAX ;color/index to x
@@ -94,7 +97,7 @@ ScreenH           = $EE       ; to draw TO
     INY
     LDA .Array3-65,x
    ;STA (Screen),y ;Skip this store, RLE below will get it
-  ;  STA PlotColor
+  ;  STA PlotColor ;unused PlotColor. Perserve A and Y
 .TriDone:
   LDX RLECount
   
@@ -107,9 +110,10 @@ ScreenH           = $EE       ; to draw TO
 .RLEDone
   BRA .readloop 
 
- .GotoBeep:
-   JMP .Beep
+;  .GotoBeep:
+;    JMP .Beep
 
+;*** MAIN DECODE LOOP ***
  .readloop:
  ;Read 2 Bytes: UNROLL!!!
   ;The unroll here added 7 frames a second on top of 30!
@@ -148,7 +152,7 @@ ScreenH           = $EE       ; to draw TO
     asl
     ora VIA_PORTA
  
- ;sta PlotColor ;A kept, PlotColor never loaded.
+ ;sta PlotColor ;A register kept, PlotColor never loaded.
   
   dec Block_Counter
   BEQ .BLOCK
@@ -175,33 +179,37 @@ ScreenH           = $EE       ; to draw TO
   
   BRA .readloop 
 .sRstTop:
-  LDA #$20   ;Reset screen pointer to first pixel
-  STA ScreenH;New Frame starts at $2000
-
-;Assumed Vsync routine. 
-;Smoothest video yet!
+  LDA #$20   ;New Frame starts at $2000   
+  STA ScreenH;Reset screen pointer to first pixel
+;Assumed Vsync routine. Smoothest video yet!
 ;This does a almost perfect job of keeping the video
-;in sync with the 30 FPS source!
-;I load the VGAClock ZP value that is DEC by
-;the Vsync NMI IRQ with 202 and use 200 as my 'zero'
+;in sync with the 30 FPS source! At frame reset
+;I load the VGAClock ZP value that has a DEC done by
+;the Vsync NMI IRQ with number 252 and use 250 as my 'zero'
 ;This allows me to get a vsync deficit and 
 ;catch-up in the frames after.
+  ;debug
+;  BRA .readloop;debug ** Start next frame **
 .Vsync: 
   LDX VGAClock
-  CPX #200 
-  BCS .EGVsync ; = > 200
-  ; Less than 200 no wait. Try to catch up,
-.Synced
+  CPX #250 
+  BCS .EGVsync ; = > 250
+; Less than 250 no wait. Try to catch up.
+.Synced:
+;keeping Y and A
   INC VGAClock ;Add two for 30 Frames a Second
-  INC VGAClock ;VGA is 60 FPS
-  BRA .readloop;Start next frame  
-.EGVsync ; = > 200
-  BEQ .Synced  ; = 200 ;Good Vsync. Done waiting.
-  ; > 200 
-  BRA .Vsync ;Wait for Vsync
+  INC VGAClock ;VGA is 60 FPS this is 10 cycles
+;   LDA #2 ;8 cycles
+;   ADC VGAClock
+;   STA VGAClock 
+
+  BRA .readloop;** Start next frame **
+.EGVsync: ; = > 250
+  BEQ .Synced  ; = 250 ;Good Vsync. Done waiting.
+  BRA .Vsync   ; > 250 ;Wait for Vsync
 
 .BLOCK: ; 320 CYCLES
-  ;must throw away 10 bytes every block.
+;Must throw away 10 bytes every block read from the SD card. No choice.
 ;OK, JUST UNROLL, NEED TO FIGURE OUT MACROS SO IT DOES NOT LOOK LIKE THIS
 ;Regardless, this is the fastest way I could think of to throw away 10 bytes
 ;It is worth FRAMES.. As in more than 1 Frame a second to do this silly stuff!
@@ -305,51 +313,46 @@ ScreenH           = $EE       ; to draw TO
   bit VIA_PORTA
   bit VIA_PORTA
 ;Done tossing bytes
+  JMP .BlockReturn 
 
-;HOW ABOUT WE LOOP FOREVER?
-  ;JMP .readloop 
-  JMP .BlockReturn   ;Yep, it will happily stream garbage off the SD card forever.
+; .BeepExit:     ;RTS
+;    JMP .readloop 
+; .Beep: ;Should be called 'Frame'
+;     ;Actual Beep moved to system IRQ.
+;     ;Right now I will assume that the encoder will send 
+;     ;some number of Audio packets before starting to send frames.
+;     ;Yea' forget that nonsense....
+;     ;Just store the music in ROM and setup a IRQ routine
+;     ;to send the beeps. Stream video only for now?
+;     ;Same with V-sync. Will move to self v-sync
+;     ;on screen roll-over.
+;     ;Leave in place for now.
 
- .BeepExit:     ;RTS
-   JMP .readloop 
- 
-.Beep: ;Should be called 'Frame'
-    ;Actual Beep moved to system IRQ.
-    ;Right now I will assume that the encoder will send 
-    ;some number of Audio packets before starting to send frames.
-    ;Yea' forget that nonsense....
-    ;Just store the music in ROM and setup a IRQ routine
-    ;to send the beeps. Stream video only for now?
-    ;Same with V-sync. Will move to self v-sync
-    ;on screen roll-over.
-    ;Leave in place for now.
+;       LDA RLECount
+;       ;BEQ .BEEP_Off    ;if note 0 turn off beep; 
+;       ;VGA wait moved to assembly code but still
+;       ;here for old encodes
+;       CMP #1           ;Yes, putting the v-sync in the beep command.
+;       ;BEQ .VgaWait     ;Both meant to be run on frames.
+;       BEQ .BeepExit ;Skip now that vsync is on 6502 side
+;       ;LAME, FIX THIS
+;       CMP #2           ;Yes, putting the v-sync in the beep command.
+;       ;BEQ .VgaWait2     ;Both meant to be run on frames at least
+;       BEQ .BeepExit ;Skip now that vsync is on 6502 side
+;                         ;Maybe I should call it a Frame command?  
 
-      LDA RLECount
-      ;BEQ .BEEP_Off    ;if note 0 turn off beep; 
-      ;VGA wait moved to assembly code but still
-      ;here for old encodes
-      CMP #1           ;Yes, putting the v-sync in the beep command.
-      ;BEQ .VgaWait     ;Both meant to be run on frames.
-      BEQ .BeepExit ;Skip now that vsync is on 6502 side
-      ;LAME, FIX THIS
-      CMP #2           ;Yes, putting the v-sync in the beep command.
-      ;BEQ .VgaWait2     ;Both meant to be run on frames at least
-      BEQ .BeepExit ;Skip now that vsync is on 6502 side
-                        ;Maybe I should call it a Frame command?  
+;       LDX BeepWrite
+;       STA BeepBuffer,x
+;       INC BeepWrite  
 
-      LDX BeepWrite
-      STA BeepBuffer,x
-      INC BeepWrite  
-
-      ;Last thing
-      INC BeepCount
-      LDA #1
-      STA BeepEnable
-      BRA .BeepExit
+;       ;Last thing
+;       INC BeepCount
+;       LDA #1 ;need to turn the BeepEnable on in case buffer emptied
+;       STA BeepEnable
+;       BRA .BeepExit
 
 
 .BootUp
- ;Not sure why I do this twice...? 
     stz VIA_PORTA
     lda #254;??? #$ff-SD_BIT_MISO 
     sta VIA_DDRA
@@ -391,10 +394,9 @@ ScreenH           = $EE       ; to draw TO
     jsr sd_waitresult
     cmp #$00
     beq .readsuccess
-;This change makes it pretty reliable after a reboot.
+    ;This change makes it pretty reliable after a reboot.
     jmp .reset 
 
-  
 .readsuccess
   ; wait for data
   jsr sd_waitresult
@@ -403,6 +405,7 @@ ScreenH           = $EE       ; to draw TO
   ;Retry until it works...
   jmp .reset
 .SdBooted
+  ;SD card booted, setup some values
   STZ BeepRead
   STZ BeepWrite
   STZ BeepCount
@@ -413,11 +416,11 @@ ScreenH           = $EE       ; to draw TO
   STA ScreenH
   ldy #0  
   ldx #0
-
 .readgotdata
   ; Need to read 512 bytes. Then throw away 10 CRC bytes
   ; Read two at a time, 256 times.
   STZ Block_Counter;$E0 
+
   lda #SD_MOSI                ; enable card (CS low), set MOSI (resting state), SCK low
   sta  VIA_PORTB 
   ; Port A is in Clock pulse mode.
@@ -430,7 +433,7 @@ ScreenH           = $EE       ; to draw TO
   ;-WE ARE STREAMING BITS FROM THE SD CARD NOW IN PORT A PA0-
  
  ;Start Vsync
-  LDA #202 
+  LDA #252 
   STA VGAClock
  
   ;*** Jump to video stream decode now! ***
@@ -440,7 +443,6 @@ ScreenH           = $EE       ; to draw TO
 
 sd_init:
   ; Let the SD card boot up, by pumping the clock with SD CS disabled
-
   ; We need to apply around 80 clock pulses with CS and MOSI high.
   ; Normally MOSI doesn't matter when CS is high, but the card is
   ; not yet is SPI mode, and in this non-SPI state it does care.
