@@ -1,0 +1,607 @@
+; Fifty1Ford/NormalLuser Ben Eater Breadboard 6502 Bad Apple! Demo
+;
+; 1 Byte encode with Run Length, Differential and Tri Pixel Encoding
+; 53 Frames a second average decode 
+; 20:1 compression
+; Automatic 30 FPS Vsync with catch-up
+;
+; Hardware: Start with stock Ben Eater 6502+Worlds Worst Video Card kits
+; You will need 2 jumper wires. Extra bypass capacitors may help with stability.
+;
+; ***************** NOTE *****************************************
+;
+; A wire connecting the VGA Vsync signal to the NMI pin on the CPU
+; is used for a Vsync IRQ. 
+; If this is not connected the system will hang.
+;
+; ****************************************************************
+;
+; Disconnect LCD and clock your system to 5 mhz. 
+; Use first counter output of VGA for 5mhz CPU clock instead of the 1 Mhz clock.
+; Run in both hsync and vsync (1 pixels on left side will have a noise line on top at 5mhz)
+; This gives you 1.4Mhz effective CPU speed.
+; I disconnect the little LCD and any buttons from the VIA while working with this.
+; Connect the Vsync from the VGA output to the NMI pin of the CPU
+; SD Card input is PA0 MISO
+; to make the serial code FAST.
+; I also have pulse mode on reads
+; USE CA2 as clock to save more cycles!!!
+; IE FAST..
+; Others are pins on VIA Port B 
+; Leave Port A empty except for MISO.
+; Did you connect the Vsync to the NMI?
+; SD CARD ROUTINE BASED ON GFOOT SD CARD 6502 GUIDE AND HELP
+;
+; Extra bypass capacitors may help with stability.
+;
+; ***************** NOTE *****************************************
+;
+; Boot ROM must have a NMI rouine with :
+;  DEC $E2
+;
+; ****************************************************************
+
+VIA              = $6000
+VIA_PORTB        = VIA
+VIA_PORTA        = VIA+1;$6001
+VIA_DDRB         = VIA+2;$6002
+VIA_DDRA         = VIA+3;$6003
+VIA_AUX          = VIA+11;$600B ;Set to 0 to stop BEEP ALSO ACR
+VIA_PCR          = VIA+12;$600C
+VIA_IORA         = VIA+15;$600F
+SD_CS   = $20 ;%00100000
+SD_MOSI = $8  ;%00001000
+; SD_SCK  = $10 ;%00010000;Clock moved to CA2
+
+zp_sd_cmd_address = $40
+; ZP addresses hold over from availible EhBasic ZP 
+; Vsync Beep for Bad Apple!
+; VGASync           = $E1;***** IF NMI hooked up to vsync this will be 1 after sync(s), you set to zero yourself.
+VGAClock          = $E2;***** IF NMI hooked up to vsync this will DEC *****
+RLECount          = $E3  
+PlotColor         = $EC       ; Color for plot function 
+Screen            = $ED       ; GFX screen location
+ScreenH           = $EE       ; to draw TO
+Block_Counter     = $E0       ; ZP counter for 512 Block CRC bytes
+BlockTwo          = $02       ; Counting to 256 twice
+; Beep/Music related:
+BeepCount         = $DD  ;ZP ** don't move without changing IRQ code
+BeepRead          = $DE  ;ZP** don't move without changing IRQ code
+BeepWrite         = $DF  ;ZP** don't move without changing IRQ code
+; BeepBuffer   = $1E00;$1800 ;$1F00 ;$1A ;$0200  ;
+; ; Display      = $2000     ;Start of memory mapped display. 100x64 mapped to 128x64
+; BeepEnable        = $DC  ;** don't move without changing IRQ code
+; ReadByteTemp      = $E4
+; BeepFile          = $E5       ; Location of audio in memory
+; BeepFileH         = $E6       ;
+; LastClock         = $E7       ;ZP
+
+
+  .ORG $300; Page align
+
+
+.reset:
+  jmp .BootUp ;Returns to readloop below
+
+.Array1: ; putting this here page aligns below for fast code without using zero page.
+    .byte 0,0,0,21,0,0,42,0,0,63,0,21,21,0,0,21,21,42,42,0,0,21,21,63,63,0,42,42,0,0,42,42,63,63,0,63,63,21,21,21,42,21,21,63,21,42,42,21,21,42,42,63,63,21,63,63,42,42,42,63,42,63,63,63
+.Array2: ; Keeps it the same 4 cycles as zero page (Array1),x 
+    .byte 0,0,21,0,0,42,0,0,63,0,21,0,21,21,42,0,42,0,21,21,63,0,63,0,21,42,0,42,42,63,0,63,0,42,63,0,63,21,21,42,21,21,63,21,42,21,42,42,63,21,63,21,42,63,21,63,42,42,63,42,63,42,63,63
+.Array3: ; This is 192 bytes
+    .byte 0,21,0,0,42,0,0,63,0,0,21,21,0,42,21,42,0,21,0,63,21,63,0,21,0,42,42,0,63,42,63,0,42,0,63,63,0,21,42,21,21,63,21,21,42,42,21,63,42,63,21,42,21,63,63,21,42,63,42,42,63,63,42,63
+
+
+.TriPixel: ;Up here so I don't need a JMP 
+  lda VIA_PORTA ;Load 6 bits for up to 64 values for each array
+  asl
+  ora VIA_PORTA 
+  asl
+  ora VIA_PORTA
+  asl
+  ora VIA_PORTA
+  asl
+  ora VIA_PORTA
+  asl
+  ora VIA_PORTA
+    
+  tax ;color/index to x
+  lda .Array1,x ; Load 1 of 4 colors (B/DG/LG/W for Bad Apple!)
+  sta (Screen),y; Draw it!
+  iny           ; Next color
+  lda .Array2,x ; Load 1 of 4 colors 
+  sta (Screen),y; Draw it!
+  iny           ; Next color
+  lda .Array3,x ; Load 1 of 4 colors 
+  sta (Screen),y; Draw it! 
+  sta PlotColor ; Store last color used for Repeats
+.TriDone:
+  jmp .readloop ; Decode another byte
+
+
+.RLE: ;Run Length Encoding
+; Load 6 bits for a repeat value of up to 64
+  lda VIA_PORTA
+  asl
+  ora VIA_PORTA 
+  asl
+  ora VIA_PORTA
+  asl
+  ora VIA_PORTA
+  asl
+  ora VIA_PORTA
+  asl
+  ora VIA_PORTA
+
+  tax ; RLE counter
+  lda PlotColor ; Last pixel color used
+.RLETop:    
+  sta (Screen),y; Draw it!
+  iny ; Next pixel
+  dex ; RLE counter
+  bne .RLETop
+.RLEDone
+  jmp .readloop ; Decode another byte
+
+
+.BLOCK:;jmp to the SD Block routine.
+  jmp .TheBLOCK
+
+
+;***************** MAIN DECODE LOOP ******************
+.readloop:
+  dec Block_Counter ; must count 512 bytes
+  beq .BLOCK        ;256 roll-over go to BLOCK routine
+.readloopStart:     ;JMP here to start and for SD card BLOCK return
+
+; Load Control Bit 1
+  lda VIA_PORTA; Read bit 8 of byte from SD card. 
+  bne .SkipRun ; If 1 Skip Pixels
+; Load Control Bit 2  
+  lda VIA_PORTA ; Else check bit 7
+  bne .RLE  ; If 1 Repeat Pixels
+  jmp .TriPixel ; Else TriPixel
+
+.SkipRun: ;Just add this amount to the screen pointer
+; Load 7 bits for a skip value up to 127
+  lda VIA_PORTA
+  asl
+  ora VIA_PORTA 
+  asl
+  ora VIA_PORTA
+  asl
+  ora VIA_PORTA
+  asl
+  ora VIA_PORTA
+  asl
+  ora VIA_PORTA
+  asl
+  ora VIA_PORTA
+  sta RLECount;Store because of adc of y below
+
+  clc 
+  tya 
+  adc RLECount; Need to add RLE count to Y  
+  tay         ; 
+  lda ScreenH ; increment the top byte of the screen pointer
+  adc #$00    ; 
+  sta ScreenH ; Since we always encode skips on the edge of the screen we only need to check
+  cmp #$40    ; for the screen roll-over at $4000 in the Skip routine.   
+  beq .sRstTop; We never roll-over while in the draw routines becuse we are always on-screen. 
+  jmp .readloop;Decode next Byte
+
+.sRstTop:
+  lda #$20   ;New Frame starts at $2000   
+  sta ScreenH;Reset screen pointer to first pixel
+
+.Vsync: 
+  ldx VGAClock ;IRQ does a DEC on Vsync
+  cpx #250     ;Using this as 'zero' sync
+  bcs .EGVsync ; = > 250 wait or sync
+.Synced:; Less than 250 no wait. Try to catch up.
+  inc VGAClock ;Add two for 30 Frames a Second
+  inc VGAClock ;VGA is 60 Frames a Second 
+  jmp .readloop;** Start next frame decode **
+
+.EGVsync: ; = > 250 It is a wait or a sync
+  beq .Synced  ; = 250 ;Good Vsync. Done waiting.
+  jmp .Vsync   ; > 250 ;Wait for Vsync
+
+
+
+.TheBLOCK:     ; Block_Counter rolled over -256 count
+  inc BlockTwo ; We need to count to 512
+  lda BlockTwo ; So we will do this twice
+  cmp #2       ; 
+  beq .TossBits; It's been 512 bytes, toss the bits
+  jmp .readloopStart; only 256, keep going
+
+.TossBits:
+  stz BlockTwo  ; Reset top Byte Counter, we know bottom rolled over
+;Must throw away 10 bytes every block read from the SD card. No choice. 320 CYCLES
+  bit VIA_PORTA 
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+
+  ;Read a Byte
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+
+  ;Read a Byte
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+
+  ;Read a Byte
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+
+  ;Read a Byte
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+
+  ;Read a Byte
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+
+  ;Read a Byte
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+
+  ;Read a Byte
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+
+  ;Read a Byte
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+
+  ;Read a Byte
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+  bit VIA_PORTA
+;Done tossing bytes
+  jmp .readloopStart ; Back to decoding
+
+
+
+;****************************************************************************
+;************************** BOOT ********************************************
+;****************************************************************************
+
+.BootUp ;SD card and system boot routines
+    stz BlockTwo
+    stz VIA_PORTA
+    lda #254;??? #$ff-SD_BIT_MISO 
+    sta VIA_DDRA
+
+    LDA #255
+    STA  VIA_DDRB;;MAKE EVERYTHING OUTPUT! $6002   ; Set the high bit in DDRB, to make PB7 an output.
+    LDA  VIA_AUX;$600b This would be a retangle wave instead of a square wave, but no real matter.    
+                        ; Set the two high bits in the ACR to get the
+    ORA  #$C0   ;1100-0000; square-wave/RECTANGLE output on PB7.  (Don't enable the
+    STA  VIA_AUX;$600b    ; T1 interrupt in the IER though.)  
+    ;Make CA2 pulse each time port A is read tnx gfoot.
+    lda #$0a 
+    STA VIA_PCR
+
+    ;Do screwy stuff to get SD card
+    ;started up in SPI mode.
+    jsr sd_init
+
+    ; Setup SD card to read forever
+    lda #SD_MOSI
+    sta  VIA_PORTB 
+    lda #$52 ; CMD18 - READ_MULTI_BLOCK
+    ;WOW, that easy, change $51 to $52 and I can stream
+    ;bytes off the SD card forrever! Yea!
+    ;Just have to remember to throw away the 10 byte
+    ;CRC every 512 bytes. Otherwise the bits stream forever.
+    jsr sd_writebyte
+    lda #$00           ; sector 24:31
+    jsr sd_writebyte
+    lda #$00           ; sector 16:23
+    jsr sd_writebyte
+    lda #$00           ; sector 8:15
+    jsr sd_writebyte
+    lda #$00           ; sector 0:7
+    jsr sd_writebyte
+    lda #RLECount           ; crc (not checked)
+    jsr sd_writebyte
+
+    jsr sd_waitresult
+    cmp #$00
+    beq .readsuccess
+    ;This change makes it pretty reliable after a reboot.
+    jmp .reset 
+
+.readsuccess
+  ; wait for data
+  jsr sd_waitresult
+  cmp #$fe
+  beq .SdBooted
+  ;Retry until it works...
+  jmp .reset
+.SdBooted
+  ;SD card booted, setup some values
+  STZ BeepRead
+  STZ BeepWrite
+  STZ BeepCount
+
+  LDA #$00
+  STA Screen
+  LDA #$20
+  STA ScreenH
+  ldy #0  
+  ldx #0
+  ; Need to read 512 bytes. Then throw away 10 CRC bytes
+  ; Read two at a time, 256 times.
+  STZ Block_Counter;$E0 
+
+  lda #SD_MOSI                ; enable card (CS low), set MOSI (resting state), SCK low
+  sta  VIA_PORTB 
+  ; Port A is in Clock pulse mode.
+  ; A read will pulse the clock. 
+  ; We will stream forever after that.
+    
+  
+  
+ ;********* Jump to video stream decode now! ************
+
+  lda VIA_PORTA ; toggle the clock once at the start to prime
+  ; -WE ARE STREAMING BITS FROM THE SD CARD NOW IN PORT A PA0-
+  lda #252 
+  sta VGAClock; Start Vsync just before starting decode
+  jmp .readloopStart ;Decoder entry point
+
+  ;*******************************************************
+
+
+sd_init:
+;  Thanks George Foot! https://github.com/gfoot/sdcard6502 and for all your help on
+;  6502.org forums and https://www.reddit.com/r/beneater/ !!
+;
+  ; Let the SD card boot up, by pumping the clock with SD CS disabled
+  ; We need to apply around 80 clock pulses with CS and MOSI high.
+  ; Normally MOSI doesn't matter when CS is high, but the card is
+  ; not yet is SPI mode, and in this non-SPI state it does care.
+;
+; Since the SD boot only runs at the start there is no real need to optimize this if it works.
+; I use Kingston Canvas Select Plus 32GB micro SD cards.
+; 2 pack with SD adapter for $8 at normal online places.
+; This code does a good job of booting them up. I've used 3 so far without issue.
+  lda #SD_CS | SD_MOSI
+  ldx #160               ; toggle the clock 160 times, so 80 low-high transitions
+.preinitloop:
+  ;eor #SD_SCK
+  sta  VIA_PORTB
+  ldy VIA_PORTA 
+  dex
+  bne .preinitloop
+  ;LDA #'P'
+  ;STA ACIA
+.cmd0 ; GO_IDLE_STATE - resets card to idle state, and SPI mode
+  lda #<cmd0_bytes
+  sta zp_sd_cmd_address
+  lda #>cmd0_bytes
+  sta zp_sd_cmd_address+1
+
+  jsr sd_sendcommand
+  sta VIA
+  ; Expect status response $01 (not initialized)
+  cmp #$01
+  bne sd_init;.initfailed
+
+.cmd8 ; SEND_IF_COND - tell the card how we want it to operate (3.3V, etc)
+  lda #<cmd8_bytes
+  sta zp_sd_cmd_address
+  lda #>cmd8_bytes
+  sta zp_sd_cmd_address+1
+
+  jsr sd_sendcommand
+
+  ; Expect status response $01 (not initialized)
+  cmp #$01
+  bne sd_init;.initfailed
+
+  ; Read 32-bit return value, but ignore it
+  jsr sd_readbyte
+  jsr sd_readbyte
+  jsr sd_readbyte
+  jsr sd_readbyte
+
+.cmd55 ; APP_CMD - required prefix for ACMD commands
+  lda #<cmd55_bytes
+  sta zp_sd_cmd_address
+  lda #>cmd55_bytes
+  sta zp_sd_cmd_address+1
+
+  jsr sd_sendcommand
+
+  ; Expect status response $01 (not initialized)
+  cmp #$01
+  bne sd_init;.initfailed
+
+.cmd41 ; APP_SEND_OP_COND - send operating conditions, initialize card
+  lda #<cmd41_bytes
+  sta zp_sd_cmd_address
+  lda #>cmd41_bytes
+  sta zp_sd_cmd_address+1
+
+  jsr sd_sendcommand
+
+  ; Status response $00 means initialised
+  cmp #$00
+  beq .initialized
+
+  ; Otherwise expect status response $01 (not initialized)
+  cmp #$01
+  bne sd_init;.initfailed
+  ; Not initialized yet, so wait a while then try again.
+  ; This retry is important, to give the card time to initialize.
+  ;jsr delay.. NOT THAT IMPORTANT? Works with just a nop.. removed delay
+  nop
+  bra .cmd55
+
+.initialized
+  rts
+
+cmd0_bytes
+  .byte $40, $00, $00, $00, $00, $95
+cmd8_bytes
+  .byte $48, $00, $00, $01, $aa, $87
+cmd55_bytes
+  .byte $77, $00, $00, $00, $00, $01
+cmd41_bytes
+  .byte $69, $40, $00, $00, $00, $01
+
+
+
+sd_readbyte:
+    lda #SD_MOSI
+    sta VIA_PORTB ; set MOSI
+
+    lda VIA_PORTA ; toggle the clock once at the start
+    lda VIA_PORTA 
+    asl
+    ora VIA_PORTA 
+    asl
+    ora VIA_PORTA
+    asl
+    ora VIA_PORTA
+    asl
+    ora VIA_PORTA
+    asl
+    ora VIA_PORTA
+    asl
+    ora VIA_PORTA
+    asl
+    ora VIA_IORA;VIA_PORTANH ; read last bit without causing a clock pulse. Cool!
+    rts
+
+
+sd_writebyte:
+  ; Tick the clock 8 times with descending bits on MOSI
+  ; SD communication is mostly half-duplex so we ignore anything it sends back here
+  ldx #8                      ; send 8 bits
+.swloop:
+  asl                         ; shift next bit into carry
+  tay                         ; save remaining bits for later
+  lda #0
+  bcc .sendbit                ; if carry clear, don't set MOSI for this bit
+  ora #SD_MOSI
+.sendbit:
+  sta VIA_PORTB                   ; set MOSI (or not) first with SCK low
+  ;eor #SD_SCK ;Clock not needed
+  sta VIA_PORTB                   ; raise SCK keeping MOSI the same, to send the bit
+  bit VIA_PORTA  ; New clock for handshake
+  tya                         ; restore remaining bits to send
+  dex
+  bne .swloop                   ; loop if there are more bits to send
+  rts
+  
+
+sd_waitresult:
+  ; Wait for the SD card to return something other than $ff
+  jsr sd_readbyte
+  cmp #$ff
+  beq sd_waitresult
+  rts
+
+sd_sendcommand:
+  ldx #0
+  lda (zp_sd_cmd_address,x)
+  lda #SD_MOSI           ; pull CS low to begin command
+  sta  VIA_PORTB 
+  ldy #0
+  lda (zp_sd_cmd_address),y    ; command byte
+  jsr sd_writebyte
+  ldy #1
+  lda (zp_sd_cmd_address),y    ; data 1
+  jsr sd_writebyte
+  ldy #2
+  lda (zp_sd_cmd_address),y    ; data 2
+  jsr sd_writebyte
+  ldy #3
+  lda (zp_sd_cmd_address),y    ; data 3
+  jsr sd_writebyte
+  ldy #4
+  lda (zp_sd_cmd_address),y    ; data 4
+  jsr sd_writebyte
+  ldy #5
+  lda (zp_sd_cmd_address),y    ; crc
+  jsr sd_writebyte
+  jsr sd_waitresult
+  pha
+  ; End command
+  lda #SD_CS | SD_MOSI   ; set CS high again
+  sta  VIA_PORTB 
+  pla   ; restore result code
+  rts
+; Turns out I just don't need any delays? Works without
+; delay
+;   ldx #0
+;   ldy #0
+; .dloop
+;   dey
+;   bne .dloop
+;   dex
+;   bne .dloop
+;   rts
+
