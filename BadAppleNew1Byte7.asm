@@ -143,15 +143,13 @@ BeepWrite         = $DF  ;ZP** don't move without changing IRQ code
   jmp .readloop ; Decode another byte
 
 
-.BLOCK:;jmp to the SD Block routine.
-  jmp .TheBLOCK
 
 
 ;***************** MAIN DECODE LOOP ******************
 .readloop:
   dec Block_Counter ; must count 512 bytes
-  beq .BLOCK        ;256 roll-over go to BLOCK routine
-.readloopStart:     ;JMP here to start and for SD card BLOCK return
+  beq .BLOCK        ; 256 roll-over go to BLOCK routine
+.readloopStart:     ; JMP here to start and for SD card BLOCK return
 
 ; Load Control Bit 1
   lda VIA_PORTA; Read bit 8 of byte from SD card. 
@@ -208,16 +206,16 @@ BeepWrite         = $DF  ;ZP** don't move without changing IRQ code
 
 
 
-.TheBLOCK:     ; Block_Counter rolled over -256 count
+.BLOCK:     ; Block_Counter rolled over -256 count
   inc BlockTwo ; We need to count to 512
   lda BlockTwo ; So we will do this twice
   cmp #2       ; 
   beq .TossBits; It's been 512 bytes, toss the bits
   jmp .readloopStart; only 256, keep going
 
-.TossBits:
+.TossBits: ; This routine is hard to place in a spot I can easily branch to 
   stz BlockTwo  ; Reset top Byte Counter, we know bottom rolled over
-;Must throw away 10 bytes every block read from the SD card. No choice. 320 CYCLES
+; Must throw away 10 bytes every block read from the SD card. No choice. 320 CYCLES
   bit VIA_PORTA 
   bit VIA_PORTA
   bit VIA_PORTA
@@ -316,7 +314,7 @@ BeepWrite         = $DF  ;ZP** don't move without changing IRQ code
   bit VIA_PORTA
   bit VIA_PORTA
   bit VIA_PORTA
-;Done tossing bytes
+; Done tossing bytes
   jmp .readloopStart ; Back to decoding
 
 
