@@ -83,11 +83,11 @@ BeepWrite         = $DF  ;ZP** don't move without changing IRQ code
 .reset:
   jmp .BootUp ;Returns to readloop below
 
-.Array1: ; putting this here page aligns below for fast code without using zero page.
+.Array1: ; Putting this here page aligns below for fast code without using zero page.
     .byte 0,0,0,21,0,0,42,0,0,63,0,21,21,0,0,21,21,42,42,0,0,21,21,63,63,0,42,42,0,0,42,42,63,63,0,63,63,21,21,21,42,21,21,63,21,42,42,21,21,42,42,63,63,21,63,63,42,42,42,63,42,63,63,63
 .Array2: ; Keeps it the same 4 cycles as zero page (Array1),x 
     .byte 0,0,21,0,0,42,0,0,63,0,21,0,21,21,42,0,42,0,21,21,63,0,63,0,21,42,0,42,42,63,0,63,0,42,63,0,63,21,21,42,21,21,63,21,42,21,42,42,63,21,63,21,42,63,21,63,42,42,63,42,63,42,63,63
-.Array3: ; This is 192 bytes
+.Array3: ; This is 192 bytes of all possible 3 Greyscale values.
     .byte 0,21,0,0,42,0,0,63,0,0,21,21,0,42,21,42,0,21,0,63,21,63,0,21,0,42,42,0,63,42,63,0,42,0,63,63,0,21,42,21,21,63,21,21,42,42,21,63,42,63,21,42,21,63,63,21,42,63,42,42,63,63,42,63
 
 
@@ -105,7 +105,7 @@ BeepWrite         = $DF  ;ZP** don't move without changing IRQ code
   ora VIA_PORTA
     
   tax ;color/index to x
-  lda .Array1,x ; Load 1 of 4 colors (B/DG/LG/W for Bad Apple!)
+  lda .Array1,x ; Load 1 of 4 colors B/DG/LG/W for Bad Apple!
   sta (Screen),y; Draw it!
   iny           ; Next color
   lda .Array2,x ; Load 1 of 4 colors 
