@@ -4,6 +4,18 @@
 Bad Apple for Worlds Worst Video Card + 6502 kits
 6502 Assembly and PC Python based encoder
 
+9/22/2024
+
+https://www.youtube.com/watch?v=0glEfLZCwmc
+
+Bad Apple!! released, look forward to a detailed guide!
+Thanks everyone!
+
+Take a look!
+https://github.com/NormalLuser/Ben-Eater-Bad-Apple/blob/main/BadAppleWozZPSNewBeep.asm
+
+
+
 1/11/2024
 47 fps decoder and Steamboat Willie encode.
 
