@@ -1,4 +1,4 @@
-; Fifty1Ford/NormalLuser Ben Eater Breadboard 6502 Bad Apple! Demo
+; NormalLuser Ben Eater Breadboard 6502 Bad Apple! Demo
 ;
 ; 1 Byte encode with Run Length, Differential and Tri Pixel Encoding
 ; 53 Frames a second average decode 
@@ -602,4 +602,5 @@ sd_sendcommand:
 ;   dex
 ;   bne .dloop
 ;   rts
+
 
