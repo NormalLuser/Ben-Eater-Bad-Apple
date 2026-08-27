@@ -53,7 +53,7 @@ MusicEnd = $C6000
 ; Add Music Data Page aligned to start
    .org MusicStart
 ;MusicStart:
-    incbin "C:\Projects\6502\MusicSFXIntroEmptyOutro.bin"
+    incbin "C:\Users\Andrew\OneDrive\Dokumente\Arduino\Assembly\Ben-Eater-Bad-Apple-main\BE_Bad_Apple\Ben-Eater-Bad-Apple\MusicSFXIntroEmptyOutro.bin"
  .align 8 ; Mark the end of the music file
     .byte 'ZUN'
 

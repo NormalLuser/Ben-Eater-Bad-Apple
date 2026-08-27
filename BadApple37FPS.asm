@@ -19,61 +19,52 @@
 ;if the last byte can be a RLE that will still work.
 
 
-PORTB = $6000
-PORTA = $6000
-DDRB = $6002
-DDRA = $6002
-ACIA         = $5000 ;
 
 VIA              = $6000
-VIA_PORTB        = VIA
-VIA_PORTA        = VIA+1;$6001
-VIA_DDRB         = VIA+2;$6002
-VIA_DDRA         = VIA+3;$6003
-VIA_T1CL         = VIA+4;$6004
-VIA_T1CH         = VIA+5;$6005
-VIA_T1LL         = VIA+6;$6006
-VIA_T1LH         = VIA+7;$6007
-VIA_T2CL         = VIA+8;$6008
-VIA_T2CH         = VIA+9;$6009
-VIA_SHIFT        = VIA+10;$600A
-VIA_AUX          = VIA+11;$600B ;Set to 0 to stop BEEP ALSO ACR
-VIA_PCR          = VIA+12;$600C
-VIA_IFR          = VIA+13;$600F
-VIA_IER          = VIA+14;$600E
-VIA_IORA         = VIA+15;$600F
+VIA_PORTB        = VIA                ; $6000
+VIA_PORTA        = VIA+1              ; $6001
+VIA_DDRB         = VIA+2              ; $6002
+VIA_DDRA         = VIA+3              ; $6003
+VIA_T1CL         = VIA+4              ; $6004
+VIA_T1CH         = VIA+5              ; $6005
+VIA_T1LL         = VIA+6              ; $6006
+VIA_T1LH         = VIA+7              ; $6007
+VIA_T2CL         = VIA+8              ; $6008
+VIA_T2CH         = VIA+9              ; $6009
+VIA_SHIFT        = VIA+10             ; $600A
+VIA_AUX          = VIA+11             ; $600B ; Set to 0 to stop BEEP ALSO ACR
+VIA_PCR          = VIA+12             ; $600C
+VIA_IFR          = VIA+13             ; $600D
+VIA_IER          = VIA+14             ; $600E
+VIA_IORA         = VIA+15             ; $600F
 
 
 
-E  = $80;%10000000 ;
-RW = $40;%01000000
-;RS = %00100000
+; VIA_PORTA (Address: $6001)
+SD_MISO = $01 ; %00000001 (bit 0)
 
-SD_CS   = $20 ;%00100000
-SD_SCK  = $10 ;%00010000
-SD_MOSI = $8  ;%00001000
-
-;SD_MISO = $4 ;%00000100 
-;SD_MISO = $80 ;%10000000 ;Moved to other port top bit
-SD_MISO = $1 ;%00000001 ;Moved to other port BOTTOM bit
+; VIA_PORTB (Address: $6000)
+SD_MOSI = $10 ; %00010000 (bit 4)
+SD_CS   = $08 ; %00001000 (bit 3)
 
 
-PORTA_OUTPUTPINS = E | RW | SD_CS | SD_SCK | SD_MOSI
-;PORTA_OUTPUTPINS = $FE ;E | RW | SD_CS | SD_SCK | SD_MOSI
+PORTB_OUTPUTPINS = SD_MOSI | SD_CS
+
+VIA_PORTB_STATE = $02 ; Zero Page variable to hold current VIA_PORTB state
+
+
 zp_sd_cmd_address = $40
 
-Display           = $2000     ;Start of memory mapped display. 100x64 mapped to 128x64
+Display           = $2000     ; Start of memory-mapped display. 100x64 mapped to 128x64
 Screen            = $ED       ; GFX screen location
-ScreenH           = $EE       ; to draw TO
+ScreenH           = $EE       ; To draw TO
 
-
-
-Color = $03
-RLECount = $01
+Color       = $03
+RLECount    = $01
 ReadByteTemp = $07
 
- ; .org $1C00
-  .ORG $1800
+
+	.ORG $1000
 
 .reset:
 
@@ -152,60 +143,193 @@ ReadByteTemp = $07
 
 
 
+
+
 .readgotdata
   ; Need to read 512 bytes.  Read two at a time, 256 times.
   lda #0
   sta $00 ; counter HERE IT IS!!!
   ;cycle clock once.
-  ;ldx VIA_PORTA
+
   lda #SD_MOSI                ; enable card (CS low), set MOSI (resting state), SCK low
   sta  VIA_PORTB 
   
-;Send Start out ACIA
-;   STA ACIA
-;    lda #'S'
-;   sta ACIA
+
   lda VIA_PORTA ; toggle the clock once at the start
 .readloop:
- ;UNROLL!!!
- ;The unroll here added 7 frames a second on top of 30.
-    lda VIA_PORTA 
-    asl
-    ora VIA_PORTA 
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
+ ; UNROLL!!!
+ ; The unroll here added 7 frames a second on top of 30.
+; Read first byte into RLECount
+    lda #$00          ; Clear accumulator
 
-  ;jsr sd_readbyte
- sta RLECount
+    ; Bit 7
+    asl               ; Shift accumulator left
+    lda VIA_PORTA     ; Trigger clock pulse, read MISO
+    and #SD_MISO
+    bne .bit7_one_1
+    jmp .bit7_done_1
+.bit7_one_1:
+    ora #$01
+.bit7_done_1:
 
-    lda VIA_PORTA 
-    asl
-    ora VIA_PORTA 
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
+    ; Bit 6
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit6_one_1
+    jmp .bit6_done_1
+.bit6_one_1:
+    ora #$01
+.bit6_done_1:
 
-  ;jsr sd_readbyte
- sta Color
+    ; Bit 5
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit5_one_1
+    jmp .bit5_done_1
+.bit5_one_1:
+    ora #$01
+.bit5_done_1:
+
+    ; Bit 4
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit4_one_1
+    jmp .bit4_done_1
+.bit4_one_1:
+    ora #$01
+.bit4_done_1:
+
+    ; Bit 3
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit3_one_1
+    jmp .bit3_done_1
+.bit3_one_1:
+    ora #$01
+.bit3_done_1:
+
+    ; Bit 2
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit2_one_1
+    jmp .bit2_done_1
+.bit2_one_1:
+    ora #$01
+.bit2_done_1:
+
+    ; Bit 1
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit1_one_1
+    jmp .bit1_done_1
+.bit1_one_1:
+    ora #$01
+.bit1_done_1:
+
+    ; Bit 0
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit0_one_1
+    jmp .bit0_done_1
+.bit0_one_1:
+    ora #$01
+.bit0_done_1:
+
+    sta RLECount      ; Store the result
+
+; Read second byte into Color
+    lda #$00          ; Clear accumulator
+
+    ; Bit 7
+    asl               ; Shift accumulator left
+    lda VIA_PORTA     ; Trigger clock pulse, read MISO
+    and #SD_MISO
+    bne .bit7_one_2
+    jmp .bit7_done_2
+.bit7_one_2:
+    ora #$01
+.bit7_done_2:
+
+    ; Bit 6
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit6_one_2
+    jmp .bit6_done_2
+.bit6_one_2:
+    ora #$01
+.bit6_done_2:
+
+    ; Bit 5
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit5_one_2
+    jmp .bit5_done_2
+.bit5_one_2:
+    ora #$01
+.bit5_done_2:
+
+    ; Bit 4
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit4_one_2
+    jmp .bit4_done_2
+.bit4_one_2:
+    ora #$01
+.bit4_done_2:
+
+    ; Bit 3
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit3_one_2
+    jmp .bit3_done_2
+.bit3_one_2:
+    ora #$01
+.bit3_done_2:
+
+    ; Bit 2
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit2_one_2
+    jmp .bit2_done_2
+.bit2_one_2:
+    ora #$01
+.bit2_done_2:
+
+    ; Bit 1
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit1_one_2
+    jmp .bit1_done_2
+.bit1_one_2:
+    ora #$01
+.bit1_done_2:
+
+    ; Bit 0
+    asl               ; Shift accumulator left
+    lda VIA_PORTA
+    and #SD_MISO
+    bne .bit0_one_2
+    jmp .bit0_done_2
+.bit0_one_2:
+    ora #$01
+.bit0_done_2:
+
+    sta Color         ; Store the result
+
+
 
 ;OK, now I need to see if it is a 'skip'
   LDA Color ;NEED THIS
@@ -222,31 +346,22 @@ ReadByteTemp = $07
 .RLETop:
   DEC RLECount
   LDA Color
-  
-  sta (Screen),y
-  ;JSR $AE6A
-  ;I don't like the screen inc code....
-  ;seems like room for improvement?
-  LDA Screen
-  CMP #$FF
-  BEQ .P1IncTop
-  INC Screen
-  BRA .P1DONE
-.P1IncTop:
-  INC ScreenH
-  LDA #$00
-  STA Screen
-  LDA ScreenH
-  CMP #$40
-  BEQ .P1RstTop
-  BRA .P1DONE
-.P1RstTop:
-  LDA #$20
-  STA ScreenH
-.P1DONE:
-  CPX RLECount
-  BEQ .RLEDone
-  BRA .RLETop
+  STA (Screen),y
+
+; Increment Screen Pointer
+	INC Screen
+	BNE .RLEContinue ; If Screen != 0, continue
+	INC ScreenH
+	LDA ScreenH
+	CMP #$40
+	BNE .RLEContinue
+	LDA #$20
+	STA ScreenH
+.RLEContinue:
+
+  LDA RLECount
+  BNE .RLETop
+
 .RLEDone:
   dec $00 ; counter 
   BEQ .BLOCK
@@ -267,42 +382,36 @@ ReadByteTemp = $07
     sta (Screen),y
     STA Color
     ;------------
-    clc  
-    LDA Screen
-    ;confuses me, why 2 seems to work?
-    adc #2;tRY2? ;3 pixels+1 for next? ;RLECount
-    sta Screen
-    lda ScreenH
-    adc #$00
-    sta ScreenH
-    CMP #$40
-    BEQ .TRstTop
-    JMP .TriDone
-.TRstTop:
-    LDA #$20
-    STA ScreenH
-    ;JMP .TriDone
+	CLC
+	LDA Screen
+	ADC #3 ; Advance by 3 bytes
+	STA Screen
+	BCC .NoCarry
+	INC ScreenH
+.NoCarry:
+	LDA ScreenH
+	CMP #$40
+	BNE .TriDone
+	LDA #$20
+	STA ScreenH
     JMP .TriDone
 
 
 
 .SkipRun:
-  clc  
-  LDA Screen
-  adc RLECount
-  sta Screen
-  lda ScreenH
-  adc #$00
-  sta ScreenH
-  CMP #$40
-  BEQ .sRstTop
-  
-  dec $00 ; counter
-  BEQ .BLOCK
-  JMP .readloop 
-.sRstTop:
-  LDA #$20
-  STA ScreenH
+	CLC  
+	LDA Screen
+	ADC RLECount
+	STA Screen
+	BCC .SkipNoCarry
+	INC ScreenH
+.SkipNoCarry:
+	LDA ScreenH
+	CMP #$40
+	BNE .SkipContinue
+	LDA #$20
+	STA ScreenH
+.SkipContinue:
   
   dec $00 ; counter
   BEQ .BLOCK
@@ -449,21 +558,25 @@ sd_init:
   ; We need to apply around 80 clock pulses with CS and MOSI high.
   ; Normally MOSI doesn't matter when CS is high, but the card is
   ; not yet is SPI mode, and in this non-SPI state it does care.
-;The code below still mostly works with old setup as well.
-;Since the SD boot only runs at the start there is no real need to optimize this if it works.
-;I use Kingston Canvas Select Plus 32GB micro SD cards.
-;2 pack with SD adapter for $8 at normal online places.
-;This code does a good job of booting them up. I've used 3 so far without issue.
+
   lda #SD_CS | SD_MOSI
   ldx #160               ; toggle the clock 160 times, so 80 low-high transitions
 .preinitloop:
-  ;eor #SD_SCK
-  sta  VIA_PORTB
-  LDY VIA_PORTA 
+  eor #SD_SCK
+  sta PORTA
   dex
   bne .preinitloop
-  LDA #'P'
-  ;STA ACIA
+  
+  jsr longdelay
+
+  lda #SD_CS | SD_MOSI
+  ldx #16               ; toggle the clock 16 times, so 8 low-high transitions
+.precmd0loop:
+  eor #SD_SCK
+  sta PORTA
+  dex
+  bne .precmd0loop
+
 .cmd0 ; GO_IDLE_STATE - resets card to idle state, and SPI mode
   lda #<cmd0_bytes
   sta zp_sd_cmd_address
@@ -471,10 +584,20 @@ sd_init:
   sta zp_sd_cmd_address+1
 
   jsr sd_sendcommand
-  STA VIA
+
   ; Expect status response $01 (not initialized)
   cmp #$01
   bne .initfailed
+
+  jsr mediumdelay
+
+  lda #SD_CS | SD_MOSI
+  ldx #16               ; toggle the clock 16 times, so 8 low-high transitions
+.precmd8loop:
+  eor #SD_SCK
+  sta PORTA
+  dex
+  bne .precmd8loop
 
 .cmd8 ; SEND_IF_COND - tell the card how we want it to operate (3.3V, etc)
   lda #<cmd8_bytes
@@ -494,7 +617,25 @@ sd_init:
   jsr sd_readbyte
   jsr sd_readbyte
 
+  jsr mediumdelay
+
+;   lda #SD_CS | SD_MOSI
+;   ldx #16               ; toggle the clock 16 times, so 8 low-high transitions
+; .precmd55loop:
+;   eor #SD_SCK
+;   sta PORTA
+;   dex
+;   bne .precmd55loop
+
 .cmd55 ; APP_CMD - required prefix for ACMD commands
+  lda #SD_CS | SD_MOSI
+  ldx #16               ; toggle the clock 16 times, so 8 low-high transitions
+.precmd55loop_1:
+  eor #SD_SCK
+  sta PORTA
+  dex
+  bne .precmd55loop_1
+
   lda #<cmd55_bytes
   sta zp_sd_cmd_address
   lda #>cmd55_bytes
@@ -505,6 +646,16 @@ sd_init:
   ; Expect status response $01 (not initialized)
   cmp #$01
   bne .initfailed
+
+  jsr mediumdelay
+
+  lda #SD_CS | SD_MOSI
+  ldx #16               ; toggle the clock 16 times, so 8 low-high transitions
+.precmd41loop:
+  eor #SD_SCK
+  sta PORTA
+  dex
+  bne .precmd41loop
 
 .cmd41 ; APP_SEND_OP_COND - send operating conditions, initialize card
   lda #<cmd41_bytes
@@ -524,22 +675,28 @@ sd_init:
 
   ; Not initialized yet, so wait a while then try again.
   ; This retry is important, to give the card time to initialize.
-  jsr delay
+
+  jsr mediumdelay
+
   jmp .cmd55
 
 
 .initialized
+  jsr longdelay
+
   lda #'Y'
- ; jsr print_char
-  ;STA ACIA
+  jsr print_char
   rts
+
+  ; loop forever
+.loop:
+  jmp .loop
+
 
 .initfailed
   lda #'X'
-  ;STA ACIA
-  ;jsr print_char
-; .loop
-  jmp sd_init ;.loop
+  jsr print_char
+  jmp .loop
 
 
 cmd0_bytes
@@ -553,75 +710,85 @@ cmd41_bytes
 
 
 
-
-
-
-
 sd_readbyte:
+  ; Enable the card and tick the clock 8 times with MOSI high, 
+  ; capturing bits from MISO and returning them
 
-    lda #SD_MOSI
-    sta VIA_PORTB ; set MOSI
+  ldx #8                      ; we'll read 8 bits
+.loop:
 
-    lda VIA_PORTA ; toggle the clock once at the start
-    lda VIA_PORTA 
-    asl
-    ora VIA_PORTA 
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_PORTA
-    asl
-    ora VIA_IORA;VIA_PORTANH       ; read last bit without causing a clock pulse
-    rts
+  lda #SD_MOSI                ; enable card (CS low), set MOSI (resting state), SCK low
+  sta PORTA
 
+  lda #SD_MOSI | SD_SCK       ; toggle the clock high
+  sta PORTA
+
+  lda PORTA                   ; read next bit
+  and #SD_MISO
+
+  clc                         ; default to clearing the bottom bit
+  beq .bitnotset              ; unless MISO was set
+  sec                         ; in which case get ready to set the bottom bit
+.bitnotset:
+
+  tya                         ; transfer partial result from Y
+  rol                         ; rotate carry bit into read result
+  tay                         ; save partial result back to Y
+
+  dex                         ; decrement counter
+  bne .loop                   ; loop if we need to read more bits
+
+  rts
 
 
 sd_writebyte:
   ; Tick the clock 8 times with descending bits on MOSI
   ; SD communication is mostly half-duplex so we ignore anything it sends back here
+
   ldx #8                      ; send 8 bits
-.swloop:
+
+.loop:
   asl                         ; shift next bit into carry
   tay                         ; save remaining bits for later
+
   lda #0
   bcc .sendbit                ; if carry clear, don't set MOSI for this bit
   ora #SD_MOSI
+
 .sendbit:
-  sta VIA_PORTB                   ; set MOSI (or not) first with SCK low
-  ;eor #SD_SCK
-  sta VIA_PORTB                   ; raise SCK keeping MOSI the same, to send the bit
-  LDA VIA_PORTA ;clock for handshake
+  sta PORTA                   ; set MOSI (or not) first with SCK low
+  eor #SD_SCK
+  sta PORTA                   ; raise SCK keeping MOSI the same, to send the bit
+
   tya                         ; restore remaining bits to send
+
   dex
-  bne .swloop                   ; loop if there are more bits to send
+  bne .loop                   ; loop if there are more bits to send
+
   rts
-  
+
 
 sd_waitresult:
   ; Wait for the SD card to return something other than $ff
-  ;LDA #'W'
-  ;STA ACIA
   jsr sd_readbyte
- ; STA ACIA  
   cmp #$ff
-  ;JSR delay
   beq sd_waitresult
   rts
 
+
 sd_sendcommand:
   ; Debug print which command is being executed
-;    LDA #'S'
-;    STA ACIA 
+  jsr lcd_cleardisplay
+
+  lda #'c'
+  jsr print_char
   ldx #0
   lda (zp_sd_cmd_address,x)
-   lda #SD_MOSI           ; pull CS low to begin command
-  sta  VIA_PORTB 
+  jsr print_hex
+
+  lda #SD_MOSI           ; pull CS low to begin command
+  sta PORTA
+
   ldy #0
   lda (zp_sd_cmd_address),y    ; command byte
   jsr sd_writebyte
@@ -640,22 +807,38 @@ sd_sendcommand:
   ldy #5
   lda (zp_sd_cmd_address),y    ; crc
   jsr sd_writebyte
+
   jsr sd_waitresult
   pha
+
+  ; Debug print the result code
+  jsr print_hex
+
   ; End command
   lda #SD_CS | SD_MOSI   ; set CS high again
-  sta  VIA_PORTB 
+  sta PORTA
+
   pla   ; restore result code
   rts
+
 
 delay
   ldx #0
   ldy #0
-.dloop
+.loop
   dey
-  bne .dloop
+  bne .loop
   dex
-  bne .dloop
+  bne .loop
   rts
 
+longdelay
+  jsr mediumdelay
+  jsr mediumdelay
+  jsr mediumdelay
+mediumdelay
+  jsr delay
+  jsr delay
+  jsr delay
+  jmp delay
 

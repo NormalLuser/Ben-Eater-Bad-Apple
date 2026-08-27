@@ -16,8 +16,7 @@ DDRB = $6002
 DDRA = $6002
 
 
-VIA              = $6000
-VIA_PORTB        = VIA
+
 VIA_PORTA        = VIA+1;$6001
 VIA_DDRB         = VIA+2;$6002
 VIA_DDRA         = VIA+3;$6003
