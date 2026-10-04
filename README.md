@@ -93,6 +93,21 @@ I pulled the resistors and instead just connect right to the via. It works fine.
 NOTE:
 I use PA0 for Data In (MISO) and CA2 for the clock.
 While doing this demo disconnect everything else from Port A. (Like the P/S2 keyboard)
+
+For additional hardware info:
+The computer is a 'Ben Eater 6502' and can be built completely yourself, or from a kit.
+Circuit diagrams:
+https://eater.net/6502
+https://eater.net/vga
+
+The SD card was connected to the VIA using this guide:
+https://github.com/gfoot/sdcard6502
+
+Check the .ASM file comments and code to verify what exact pins on the VIA to use as they changed over the course of development.
+I have a new version of Bad!Apple with PCM audio I am working on that uses the PS/2 keyboard hardware to read the SD card much faster:
+https://www.youtube.com/watch?v=7aXbh9VUB3U&t=14s
+Be sure to check back!
+
 You can use whatever you like on Port B but leave PA7 (bit 8) free for music in the future.
 I happened to use bit 5  VIA pin PB4 for Data Out (MOSI) and bit 3 VIA pin PB3 for chip select.
 
